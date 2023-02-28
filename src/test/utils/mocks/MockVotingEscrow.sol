@@ -32,6 +32,10 @@ contract MockVotingEscrow is IVotingEscrow {
     }
 
     function locked(address) external view returns (LockedBalance memory) {}
+
+    function totalSupply(uint256) external view returns (uint256) {
+        return 0;
+    }
 }
 
 

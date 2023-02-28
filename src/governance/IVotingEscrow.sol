@@ -10,4 +10,6 @@ interface IVotingEscrow {
     function locked(address) external view returns (LockedBalance memory);
 
     function balanceOf(address) external view returns (uint256);
+
+    function totalSupply(uint256) external view returns (uint256);
 }
