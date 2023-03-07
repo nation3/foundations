@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
-import {IVotingEscrow} from "../../../governance/IVotingEscrow.sol";
+import {IVotingEscrow, Point} from "../../../governance/IVotingEscrow.sol";
 
 contract MockVotingEscrow is IVotingEscrow {
     string name;
@@ -21,7 +21,11 @@ contract MockVotingEscrow is IVotingEscrow {
 
     function transfer(address to, uint256 amount) external returns (bool) {}
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {}
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool) {}
 
     function setBalance(address to, uint256 amount) public {
         _balance[to] = amount;
@@ -36,6 +40,26 @@ contract MockVotingEscrow is IVotingEscrow {
     function totalSupply(uint256) external view returns (uint256) {
         return 0;
     }
+
+    function balanceOfAt(address account, uint256) external view returns (uint256) {
+        return _balance[account];
+    }
+
+    function totalSupplyAt(uint256) external view returns (uint256) {
+        return 0;
+    }
+
+    function point_history(uint256) external view returns (Point memory) {
+        return Point(0, 0, 0, 0);
+    }
+
+    function user_point_epoch(address) external view returns (uint256) {
+        return 1;
+    }
+
+    function user_point_history(address, uint256) external view returns (Point memory) {
+        return Point(0, 0, 0, 0);
+    }
+
+    function increase_unlock_time(uint256) external view {}
 }
-
-
