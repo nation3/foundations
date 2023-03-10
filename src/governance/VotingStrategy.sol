@@ -3,8 +3,6 @@ pragma solidity 0.8.10;
 
 import {PassportIssuer} from "../passport/PassportIssuer.sol";
 import {IVotingEscrow, Point} from "./IVotingEscrow.sol";
-// Remove this import
-import {console2} from "forge-std/console2.sol";
 
 contract VotingStrategy {
     error DelegateIsNotPassportHolder();
@@ -34,107 +32,83 @@ contract VotingStrategy {
         return _supplyPointEpoch;
     }
 
-    // This is still a WIP. It's messy af
-
-    //
-    function registerVotingPower(address representative) external {
+    function registerVotingPower(address holder, address representative) external {
         if (passportIssuer.passportStatus(representative) != 1) revert DelegateIsNotPassportHolder();
 
-        /*
-        address oldRepresentative = _representativeOf[msg.sender];
-
-        _userCheckpoint(msg.sender); */
-        /* address oldProxy = _delegateOf[msg.sender];
-
-        if (oldProxy != address(0)) {
-            if (oldProxy == delegateTo) revert AlreadyDelegatedToThisAddress();
-
-            // Remove delegate from old proxy
-            for (uint256 i = 0; i < _proxyOf[delegateTo].length; ++i) {
-                if (_proxyOf[delegateTo][i] == msg.sender) {
-                    _proxyOf[delegateTo][i] = _proxyOf[delegateTo][_proxyOf[delegateTo].length - 1];
-                    _proxyOf[delegateTo].pop();
-                    break;
-                }
-            }
-        } */
-        // Add delegate to new proxy
-        /* _delegateOf[msg.sender] = delegateTo;
-        _proxyOf[delegateTo].push(msg.sender); */
+        _checkpoint(holder, representative);
     }
 
-    function _checkpoint(address _address, address representative) external {
+    function _checkpoint(address holder, address representative) public {
         // USER CHECKPOINT //
-        uint256 lastVeUserEpoch = veToken.user_point_epoch(_address);
-        uint256 lastUserEpoch = _userPointEpoch[_address];
+        uint256 veUserEpoch = veToken.user_point_epoch(holder);
+        uint256 userEpoch = _userPointEpoch[holder];
 
-        uint256 lastRegisteredVeEpoch = _userVeTokenEpoch[_address];
+        uint256 registeredVeEpoch = _userVeTokenEpoch[holder];
 
         Point memory previousUserPoint;
         Point memory userPoint;
 
-        if (lastRegisteredVeEpoch == lastVeUserEpoch) {
-            // no need to query veToken
-            userPoint = _userPointHistory[_address][lastUserEpoch];
-        } else if (lastVeUserEpoch > lastRegisteredVeEpoch) {
-            userPoint = veToken.user_point_history(_address, lastVeUserEpoch);
+        if (registeredVeEpoch == veUserEpoch) {
+            // no need to query veToken as balance remains the same
+            userPoint = _userPointHistory[holder][userEpoch];
+        } else if (veUserEpoch > registeredVeEpoch) {
+            // TODO: maybe this can be removed? registeredEpoch can't be > veUserEpoch
+            userPoint = veToken.user_point_history(holder, veUserEpoch);
         }
 
         userPoint.bias -= userPoint.slope * uint128(block.timestamp - userPoint.ts);
+
         userPoint.ts = block.timestamp;
         userPoint.blk = block.number;
 
-        _userPointHistory[_address][lastUserEpoch + 1] = userPoint;
+        // test: sum +1 to userEpoch on store directly here? gas cost?
+        _userPointHistory[holder][userEpoch + 1] = userPoint;
 
-        // TODO: Check else if above ^ for correctness
+        _userVeTokenEpoch[holder] = veUserEpoch;
+        _userPointEpoch[holder] += 1;
 
-        _userVeTokenEpoch[_address] = lastVeUserEpoch;
-        _userPointEpoch[_address] += 1;
-
-        // Epoch 1 is the first time a user votes.
-        // Epoch 0 is always Point(0,0,0,0)
-        if (lastVeUserEpoch > 1) {
-            previousUserPoint = veToken.user_point_history(_address, lastVeUserEpoch - 1);
+        // Epoch 1 is the first lock. Epoch 0 (no lock) is always Point(0,0,0,0)
+        // If epoch > 1, then user has locked before and we need to calculate the
+        // delta between the last lock and new lock.
+        if (veUserEpoch > 1) {
+            previousUserPoint = veToken.user_point_history(holder, veUserEpoch - 1);
 
             if (block.timestamp > previousUserPoint.ts) {
                 previousUserPoint.bias -= previousUserPoint.slope * uint128(block.timestamp - previousUserPoint.ts);
             }
         }
+
         // REPRESENTATIVE CHECKPOINT //
+        uint256 representativeEpoch = _representativePointEpoch[representative];
 
-        address oldRepresentative = _representativeOf[_address];
+        Point memory representativePoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
 
-        Point memory currentRepresentativePoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
-
-        uint256 lastRepresentativeEpoch = _representativePointEpoch[representative];
-
-        if (lastRepresentativeEpoch > 0) {
-            currentRepresentativePoint = _representativePointHistory[lastRepresentativeEpoch];
+        if (representativeEpoch > 0) {
+            representativePoint = _representativePointHistory[representative][representativeEpoch];
         }
 
-        currentRepresentativePoint.bias -=
-            currentRepresentativePoint.slope *
-            uint128(block.timestamp - currentRepresentativePoint.ts);
+        representativePoint.bias -= representativePoint.slope * uint128(block.timestamp - representativePoint.ts);
+
+        address oldRepresentative = _representativeOf[holder];
 
         if (oldRepresentative == representative) {
-            // We need to add the delta slope for this user
-            // to the contract's slope
-            currentRepresentativePoint.bias += (userPoint.bias - previousUserPoint.bias);
-            currentRepresentativePoint.slope += (userPoint.slope - previousUserPoint.slope);
+            representativePoint.bias += (userPoint.bias - previousUserPoint.bias);
+            representativePoint.slope += (userPoint.slope - previousUserPoint.slope);
         } else if (oldRepresentative == address(0)) {
-            currentRepresentativePoint.bias += userPoint.bias;
-            currentRepresentativePoint.slope += userPoint.slope;
+            representativePoint.bias += userPoint.bias;
+            representativePoint.slope += userPoint.slope;
         } else {
-            // new non-null representative
-            currentRepresentativePoint.bias += userPoint.bias;
-            currentRepresentativePoint.slope += userPoint.slope;
+            // New non-null representative
 
-            Point memory oldRepresentativePoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
+            representativePoint.bias += userPoint.bias;
+            representativePoint.slope += userPoint.slope;
 
             uint256 oldRepresentativeEpoch = _representativePointEpoch[oldRepresentative];
 
+            Point memory oldRepresentativePoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
+
             if (oldRepresentativeEpoch > 0) {
-                oldRepresentativePoint = _representativePointHistory[oldRepresentativeEpoch];
+                oldRepresentativePoint = _representativePointHistory[oldRepresentative][oldRepresentativeEpoch];
             }
 
             oldRepresentativePoint.bias -=
@@ -147,42 +121,46 @@ contract VotingStrategy {
             oldRepresentativePoint.ts = block.timestamp;
             oldRepresentativePoint.blk = block.number;
 
-            _representativeOf[_address] = representative;
+            _representativePointHistory[oldRepresentative][oldRepresentativeEpoch + 1] = oldRepresentativePoint;
+            _representativePointEpoch[oldRepresentative] += 1;
+
+            _representativeOf[holder] = representative;
         }
 
-        lastRepresentativePoint.ts = block.timestamp;
-        lastRepresentativePoint.blk = block.number;
+        representativePoint.ts = block.timestamp;
+        representativePoint.blk = block.number;
 
-        _representativePointHistory[++lastRepresentativeEpoch] = lastRepresentativePoint;
+        _representativePointHistory[representative][representativeEpoch + 1] = representativePoint;
+        _representativePointEpoch[representative] += 1;
 
         // SUPPLY CHECKPOINT //
-        Point memory lastPoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
+        Point memory supplyPoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
 
         if (_supplyPointEpoch > 0) {
-            lastPoint = _supplyPointHistory[_supplyPointEpoch];
+            supplyPoint = _supplyPointHistory[_supplyPointEpoch];
         }
 
-        lastPoint.bias -= lastPoint.slope * uint128(block.timestamp - lastPoint.ts);
+        supplyPoint.bias -= supplyPoint.slope * uint128(block.timestamp - supplyPoint.ts);
 
-        // We need to add the delta slope for this user
-        // to the contract's slope
-        lastPoint.bias += (userPoint.bias - previousUserPoint.bias);
-        lastPoint.slope += (userPoint.slope - previousUserPoint.slope);
+        // Delta decay for this user needs to be added to the supply point
+        supplyPoint.bias += (userPoint.bias - previousUserPoint.bias);
+        supplyPoint.slope += (userPoint.slope - previousUserPoint.slope);
 
-        lastPoint.ts = block.timestamp;
-        lastPoint.blk = block.number;
+        supplyPoint.ts = block.timestamp;
+        supplyPoint.blk = block.number;
 
-        _supplyPointHistory[++_supplyPointEpoch] = lastPoint;
+        _supplyPointHistory[++_supplyPointEpoch] = supplyPoint;
     }
 
     function balanceOf(address _address) external view returns (uint256) {
-        uint256 lastUserEpoch = _userPointEpoch[_address];
+        uint256 representativeEpoch = _representativePointEpoch[_address];
 
-        if (lastUserEpoch == 0) return 0;
+        if (representativeEpoch == 0) return 0;
 
-        Point memory userPoint = _userPointHistory[_address][lastUserEpoch];
+        Point memory representativePoint = _representativePointHistory[_address][representativeEpoch];
 
-        return userPoint.bias - (userPoint.slope * uint128(block.timestamp - userPoint.ts));
+        return
+            representativePoint.bias - (representativePoint.slope * uint128(block.timestamp - representativePoint.ts));
     }
 
     function totalSupply() external view returns (uint256) {
@@ -195,20 +173,21 @@ contract VotingStrategy {
         assert(_block <= block.number);
 
         uint256 _min = 0;
-        uint256 _max = _userPointEpoch[_address];
+        uint256 _max = _representativePointEpoch[_address];
+
         for (uint256 i = 0; i < 128; i++) {
             if (_min >= _max) {
                 break;
             }
             uint256 _mid = (_min + _max + 1) / 2;
-            if (_userPointHistory[_address][_mid].blk <= _block) {
+            if (_representativePointHistory[_address][_mid].blk <= _block) {
                 _min = _mid;
             } else {
                 _max = _mid - 1;
             }
         }
 
-        Point memory userPoint = _userPointHistory[_address][_min];
+        Point memory representativePoint = _representativePointHistory[_address][_min];
         uint256 maxEpoch = _supplyPointEpoch;
 
         uint256 _epoch = _findBlockEpoch(_block, maxEpoch);
@@ -229,7 +208,7 @@ contract VotingStrategy {
             blockTime += (deltaTs * (_block - point0.blk)) / deltaBlock;
         }
 
-        return userPoint.bias - userPoint.slope * uint128(blockTime - userPoint.ts);
+        return representativePoint.bias - representativePoint.slope * uint128(blockTime - representativePoint.ts);
     }
 
     function totalSupplyAt(uint256 _block) public view returns (uint256) {
