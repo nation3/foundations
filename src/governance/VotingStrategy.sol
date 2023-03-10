@@ -41,7 +41,7 @@ contract VotingStrategy {
     function _checkpoint(address holder, address representative) public {
         // USER CHECKPOINT //
         uint256 veUserEpoch = veToken.user_point_epoch(holder);
-        uint256 userEpoch = _userPointEpoch[holder];
+        //uint256 userEpoch = _userPointEpoch[holder];
 
         uint256 registeredVeEpoch = _userVeTokenEpoch[holder];
 
@@ -50,7 +50,7 @@ contract VotingStrategy {
 
         if (registeredVeEpoch == veUserEpoch) {
             // no need to query veToken as balance remains the same
-            userPoint = _userPointHistory[holder][userEpoch];
+            userPoint = _userPointHistory[holder][_userPointEpoch[holder]];
         } else if (veUserEpoch > registeredVeEpoch) {
             // TODO: maybe this can be removed? registeredEpoch can't be > veUserEpoch
             userPoint = veToken.user_point_history(holder, veUserEpoch);
@@ -61,11 +61,9 @@ contract VotingStrategy {
         userPoint.ts = block.timestamp;
         userPoint.blk = block.number;
 
-        // test: sum +1 to userEpoch on store directly here? gas cost?
-        _userPointHistory[holder][userEpoch + 1] = userPoint;
+        _userPointHistory[holder][++_userPointEpoch[holder]] = userPoint;
 
         _userVeTokenEpoch[holder] = veUserEpoch;
-        _userPointEpoch[holder] += 1;
 
         // Epoch 1 is the first lock. Epoch 0 (no lock) is always Point(0,0,0,0)
         // If epoch > 1, then user has locked before and we need to calculate the
@@ -121,8 +119,9 @@ contract VotingStrategy {
             oldRepresentativePoint.ts = block.timestamp;
             oldRepresentativePoint.blk = block.number;
 
-            _representativePointHistory[oldRepresentative][oldRepresentativeEpoch + 1] = oldRepresentativePoint;
-            _representativePointEpoch[oldRepresentative] += 1;
+            _representativePointHistory[oldRepresentative][
+                ++_representativePointEpoch[oldRepresentative]
+            ] = oldRepresentativePoint;
 
             _representativeOf[holder] = representative;
         }
@@ -130,8 +129,7 @@ contract VotingStrategy {
         representativePoint.ts = block.timestamp;
         representativePoint.blk = block.number;
 
-        _representativePointHistory[representative][representativeEpoch + 1] = representativePoint;
-        _representativePointEpoch[representative] += 1;
+        _representativePointHistory[representative][++_representativePointEpoch[representative]] = representativePoint;
 
         // SUPPLY CHECKPOINT //
         Point memory supplyPoint = Point({bias: 0, slope: 0, ts: block.timestamp, blk: block.number});
