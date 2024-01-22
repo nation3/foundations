@@ -12,6 +12,7 @@
 ### Requirements
 
 - foundry
+- pyenv
 - node v16
 - working rpc node (local chain)
 
@@ -23,6 +24,12 @@ See https://book.getfoundry.sh/getting-started/installation.html
 curl -L https://foundry.paradigm.xyz | bash
 brew install libusb
 foundryup
+```
+
+### Install [pyenv](https://github.com/pyenv/pyenv)
+```sh
+brew update
+brew install pyenv
 ```
 
 ### Local Setup
