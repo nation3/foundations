@@ -2,6 +2,8 @@ import { wallet, dec, save } from "./helpers";
 import { ethers, BigNumber, Contract } from "ethers";
 import { formatUnits } from "@ethersproject/units"
 
+import { exec } from "child_process";
+
 import Nation from '../out/NATION.sol/NATION.json';
 import VotingEscrow from '../out/VotingEscrow.vy/VotingEscrow.json';
 import LiquidityDistributor from '../out/BoostedLiquidityDistributor.sol/BoostedLiquidityDistributor.json';
@@ -20,6 +22,17 @@ const deployContract = async ({ name, deployer, factory, args }: { name: string,
   await contract.deployed();
   console.log(`Deployed ${name} to: ${contract.address}`)
   return contract;
+}
+
+const verifyContact = async (address: string, path: string, constructorArgs: Array<any>) => {
+  exec(
+    ["forge verify-contract", address, path, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
 }
 
 const deployNation = async () => {
@@ -166,6 +179,17 @@ const main = async () => {
   save(deployment, manifestFile);
 
   console.log(`Deployment manifest saved to ${manifestFile}`)
+
+  console.log("Contract verification...")
+  // await verifyContact(NATION.address, "src/tokens/NATION.sol:NATION", [])
+  // // await verifyContact(veNATION.address, "src/tokens/NATION.sol:NATION", []) //TODO: Verify vyper contract later
+  // TODO: 
+  // await verifyContact(lpContracts.lpToken.address, "src/tokens/NATION.sol:NATION", [])
+  // await verifyContact(lpContracts.lpRewardsContract.address, "src/tokens/NATION.sol:NATION", [])
+  // await verifyContact(passportContracts.passportToken.address, "src/tokens/NATION.sol:NATION", [])
+  // await verifyContact(passportContracts.passportIssuer.address, "src/tokens/NATION.sol:NATION", [])
+
+  await verifyContact("0x23Ca3002706b71a440860E3cf8ff64679A00C9d7", "src/tokens/NATION.sol:NATION", [])
 }
 
 
