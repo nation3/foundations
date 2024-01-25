@@ -24,16 +24,6 @@ const deployContract = async ({ name, deployer, factory, args }: { name: string,
   return contract;
 }
 
-const verifyContact = async (address: string, path: string, constructorArgs: Array<any>) => {
-  exec(
-    ["forge verify-contract", address, path, "--chain-id", 11155111].join(" "),
-    (error, stdout, stderr) => {
-      console.log(error)
-      console.log(stdout)
-      console.log(stderr)
-    }
-  );
-}
 
 const deployNation = async () => {
   const supply: BigNumber = BigNumber.from(process.env.NATION_SUPPLY ?? dec(42069, 18));
@@ -50,6 +40,17 @@ const deployNation = async () => {
   console.log(`Minted ${formatUnits(supply, 18)} tokens to deployer address`)
 
   return nationToken;
+}
+const verifyNationContract = async (address: string, path: string, constructorArgs: Array<any>) => {
+  exec(
+    ["forge verify-contract", address, path, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
+
 }
 
 const deployVeNation = async (nationToken: Contract) => {
@@ -119,6 +120,30 @@ const deployLiquidityDistributor = async (rewardsToken: Contract, boostToken: Co
   return { "lpToken": lpToken, "lpRewardsContract": distributor }
 }
 
+const verifyLpToken = async (address: string, path: string) => {
+  const tokenFactory = getContractFactory(MockERC20);
+  const args = tokenFactory.interface.encodeDeploy(["80NATION-20WETH", "80NATION-20WETH", BigNumber.from(dec(314, 18))])
+  exec(
+    ["forge verify-contract", address, path, "--constructor-args", args, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
+}
+
+const verifyLiquidityDistributor = async (address: string, path: string) => {
+  exec(
+    ["forge verify-contract", address, path, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
+}
+
 const deployPassport = async (governanceToken: Contract) => {
   const agreementStatement = "By claiming a Nation3 passport I agree to the terms defined in the following URL";
   const agreementURI = "https://bafkreiadlf3apu3u7blxw7t2yxi7oyumeuzhoasq7gqmcbaaycq342xq74.ipfs.dweb.link";
@@ -152,6 +177,30 @@ const deployPassport = async (governanceToken: Contract) => {
   return { "passportToken": passportToken, "passportIssuer": passportIssuer, "agreementStatement": agreementStatement, "agreementURI": agreementURI }
 }
 
+const verifyPassport = async (address: string, path: string) => {
+  const passportFactory = getContractFactory(Passport);
+  const args = passportFactory.interface.encodeDeploy(["Nation3 Passport", "PASS3"])
+  exec(
+    ["forge verify-contract", address, path, "--constructor-args", args, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
+}
+
+const verifyPassportIssuer = async (address: string, path: string) => {
+  exec(
+    ["forge verify-contract", address, path, "--chain-id", 11155111].join(" "),
+    (error, stdout, stderr) => {
+      console.log(error)
+      console.log(stdout)
+      console.log(stderr)
+    }
+  );
+}
+
 const main = async () => {
   console.log(`Using deployer: ${wallet.address}`);
 
@@ -181,15 +230,13 @@ const main = async () => {
   console.log(`Deployment manifest saved to ${manifestFile}`)
 
   console.log("Contract verification...")
-  // await verifyContact(NATION.address, "src/tokens/NATION.sol:NATION", [])
-  // // await verifyContact(veNATION.address, "src/tokens/NATION.sol:NATION", []) //TODO: Verify vyper contract later
-  // TODO: 
-  // await verifyContact(lpContracts.lpToken.address, "src/tokens/NATION.sol:NATION", [])
-  // await verifyContact(lpContracts.lpRewardsContract.address, "src/tokens/NATION.sol:NATION", [])
-  // await verifyContact(passportContracts.passportToken.address, "src/tokens/NATION.sol:NATION", [])
-  // await verifyContact(passportContracts.passportIssuer.address, "src/tokens/NATION.sol:NATION", [])
 
-  await verifyContact("0x23Ca3002706b71a440860E3cf8ff64679A00C9d7", "src/tokens/NATION.sol:NATION", [])
+  await verifyNationContract("0x23Ca3002706b71a440860E3cf8ff64679A00C9d7", "src/tokens/NATION.sol:NATION", [])
+  await verifyLpToken("0x6417755C00d5c17DeC196Df00a6F151E448B1471", "src/test/utils/mocks/MockERC20.sol:MockERC20")
+  await verifyLiquidityDistributor("0x534AB4F195Ac166B78d9edCdbeA04802392711aA", "src/distributors/BoostedLiquidityDistributor.sol:BoostedLiquidityDistributor")
+  await verifyLiquidityDistributor("0x534AB4F195Ac166B78d9edCdbeA04802392711aA", "src/distributors/BoostedLiquidityDistributor.sol:BoostedLiquidityDistributor")
+  await verifyPassport("0x11f30642277A70Dab74C6fAF4170a8b340BE2f98", "src/passport/Passport.sol:Passport")
+  await verifyPassportIssuer("0xdad32e13E73ce4155a181cA0D350Fee0f2596940", "src/passport/PassportIssuer.sol:PassportIssuer")
 }
 
 
