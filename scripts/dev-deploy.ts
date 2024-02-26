@@ -1,6 +1,7 @@
 import { wallet, dec, save } from "./helpers";
 import { ethers, BigNumber, Contract } from "ethers";
 import { formatUnits } from "@ethersproject/units"
+import { network } from "hardhat";
 
 import { exec } from "child_process";
 
@@ -229,7 +230,11 @@ const main = async () => {
 
   console.log(`Deployment manifest saved to ${manifestFile}`)
 
-  console.log("Contract verification...")
+  if (network.name == "hardhat") {
+    return
+  }
+  console.log('Waiting for 30 seconds before verifying...');
+  await sleep(30_000);
 
   await verifyNationContract("0x23Ca3002706b71a440860E3cf8ff64679A00C9d7", "src/tokens/NATION.sol:NATION", [])
   await verifyLpToken("0x6417755C00d5c17DeC196Df00a6F151E448B1471", "src/test/utils/mocks/MockERC20.sol:MockERC20")
@@ -237,6 +242,12 @@ const main = async () => {
   await verifyLiquidityDistributor("0x534AB4F195Ac166B78d9edCdbeA04802392711aA", "src/distributors/BoostedLiquidityDistributor.sol:BoostedLiquidityDistributor")
   await verifyPassport("0x11f30642277A70Dab74C6fAF4170a8b340BE2f98", "src/passport/Passport.sol:Passport")
   await verifyPassportIssuer("0xdad32e13E73ce4155a181cA0D350Fee0f2596940", "src/passport/PassportIssuer.sol:PassportIssuer")
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 
